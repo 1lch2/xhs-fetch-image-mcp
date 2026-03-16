@@ -1,6 +1,15 @@
 # XHS Fetch Image MCP Server
 
-A Model Context Protocol (MCP) server for fetching images from Xiaohongshu (小红书) posts.
+English | [简体中文](README_CN.md)
+
+A Model Context Protocol (MCP) server for extracting original-quality images from Xiaohongshu (小红书) posts.
+
+## Features
+
+- **Multiple Input Formats**: Accepts share button text, short links (xhslink.com), or full URLs
+- **Original Quality**: Transforms compressed CDN URLs to original high-resolution images
+- **Video Detection**: Identifies video posts and returns an appropriate message
+- **Share Text Parsing**: Automatically extracts short links from copied share text
 
 ## Installation
 
@@ -9,23 +18,44 @@ npm install
 npm run build
 ```
 
-## Usage with Claude Desktop
+## MCP Server Configuration
 
-Add this server to your Claude Desktop config:
+Add this server to your client configuration:
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+### Configuration JSON
 
 ```json
 {
   "mcpServers": {
     "xhs-fetch-image": {
       "command": "node",
-      "args": ["/path/to/xhs-fetch-image-mcp/dist/index.js"]
+      "args": ["YOUR_PATH_TO_DIRECTORY\\xhs-fetch-image-mcp\\dist\\index.js"]
     }
   }
 }
 ```
+
+**Note**: Replace the path in `args` with the absolute path to your `dist/index.js` file.
+
+## Available Tools
+
+### fetch_xhs_image
+
+Extract original-quality images from a Xiaohongshu (小红书) post.
+
+**Input Schema:**
+
+```typescript
+{
+  content: string; // Xiaohongshu share text, short link (xhslink.com), or full post URL
+}
+```
+
+**Output:**
+
+- For image posts: Title and list of original-quality image URLs
+- For video posts: "This post is a video, no images available."
+- For errors: Error message with details
 
 ## Development
 
@@ -40,14 +70,25 @@ npm run build
 npm start
 ```
 
-## Available Tools
+## Requirements
 
-### fetch_xhs_image
+- Node.js 18+ (for native fetch support)
+- TypeScript 5.3+
 
-Fetch images from a Xiaohongshu post URL.
+## Dependencies
 
-**Parameters:**
-- `url` (string, required): The Xiaohongshu post URL
+- `@modelcontextprotocol/sdk` - MCP server framework
+- `zod` - Input validation
+
+## Error Handling
+
+| Error                          | Description                                  |
+| ------------------------------ | -------------------------------------------- |
+| `Failed to resolve short link` | Could not extract or resolve xhslink.com URL |
+| `Invalid Xiaohongshu URL`      | Could not extract postId or xsecToken        |
+| `Initial state not found`      | Page structure changed or anti-bot triggered |
+| `XHS returned 4xx/5xx`         | Post not found or server error               |
+| `This post is a video`         | Video posts have no images to extract        |
 
 ## License
 

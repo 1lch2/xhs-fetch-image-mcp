@@ -1,81 +1,79 @@
 #!/usr/bin/env node
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  Tool,
-} from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
+import { extractImages } from './xhs-extract.js';
 
-// Define available tools
-const TOOLS: Tool[] = [
+// Create the MCP server using the high-level McpServer API
+const server = new McpServer({
+  name: 'xhs-fetch-image-mcp',
+  version: '1.0.0',
+});
+
+// Register the fetch_xhs_image tool
+server.registerTool(
+  'fetch_xhs_image',
   {
-    name: "fetch_xhs_image",
-    description: "Fetch images from a Xiaohongshu (小红书) post URL",
+    description: 'Extract original-quality images from a Xiaohongshu (小红书) post. Accepts share button text, short links (xhslink.com), or full URLs.',
     inputSchema: {
-      type: "object",
-      properties: {
-        url: {
-          type: "string",
-          description: "The Xiaohongshu post URL",
-        },
-      },
-      required: ["url"],
+      content: z.string().describe('Xiaohongshu share text, short link (xhslink.com), or full post URL'),
     },
   },
-];
+  async ({ content }) => {
+    try {
+      const result = await extractImages(content);
 
-// Create the MCP server
-const server = new Server(
-  {
-    name: "xhs-fetch-image-mcp",
-    version: "1.0.0",
+      // Handle video posts
+      if (result.isVideo) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'This post is a video, no images available.',
+            },
+          ],
+        };
+      }
+
+      // Format the output
+      const outputLines = [
+        `Title: ${result.title}`,
+        '',
+        `Found ${result.images.length} image(s):`,
+        ...result.images.map((url, i) => `${i + 1}. ${url}`),
+      ];
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: outputLines.join('\n'),
+          },
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error.message}`,
+          },
+        ],
+        isError: true,
+      };
+    }
   },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
 );
-
-// Handle tool listing
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: TOOLS,
-  };
-});
-
-// Handle tool execution
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
-  if (name === "fetch_xhs_image") {
-    const { url } = args as { url: string };
-    
-    // TODO: Implement image fetching logic
-    // This is a placeholder implementation
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Fetching images from: ${url}\n\nImplementation pending...`,
-        },
-      ],
-    };
-  }
-
-  throw new Error(`Unknown tool: ${name}`);
-});
 
 // Start the server
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("XHS Fetch Image MCP server running on stdio");
+  console.error('XHS Fetch Image MCP server running on stdio');
 }
 
 main().catch((error) => {
-  console.error("Fatal error:", error);
+  console.error('Fatal error:', error);
   process.exit(1);
 });

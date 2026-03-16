@@ -4,17 +4,34 @@
   "description": "MCP server for fetching images from Xiaohongshu (小红书)",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "xhs-fetch-image-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "prepare": "npm run build"
   },
-  "keywords": ["mcp", "xiaohongshu", "xhs", "images"],
+  "keywords": [
+    "mcp",
+    "xiaohongshu",
+    "xhs",
+    "images",
+    "model-context-protocol"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

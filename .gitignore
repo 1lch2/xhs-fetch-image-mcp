@@ -35,3 +35,5 @@ lerna-debug.log*
 # Testing
 coverage/
 .nyc_output/
+
+.claude/settings.*.json
