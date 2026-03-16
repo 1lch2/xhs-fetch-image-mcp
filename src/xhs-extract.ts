@@ -3,8 +3,7 @@
  * Ported from Cloudflare Pages implementation
  */
 
-const FALLBACK_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+import { getRandomUserAgent } from './user-agent.js';
 
 interface PostInfo {
   postId: string;
@@ -44,7 +43,7 @@ const parseShortLink = async (content: string): Promise<string | null> => {
       method: 'GET',
       redirect: 'follow',
       headers: {
-        'User-Agent': FALLBACK_UA,
+        'User-Agent': getRandomUserAgent(),
         Referer: 'https://www.xiaohongshu.com/',
         Accept:
           'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
@@ -121,7 +120,7 @@ const fetchPostData = async (postId: string, xsecToken: string): Promise<Extract
 
   const response = await fetch(targetUrl, {
     headers: {
-      'User-Agent': FALLBACK_UA,
+      'User-Agent': getRandomUserAgent(),
       Referer: 'https://www.xiaohongshu.com/',
       Accept:
         'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
