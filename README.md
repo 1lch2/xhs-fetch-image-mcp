@@ -11,7 +11,6 @@ A Model Context Protocol (MCP) server for extracting original-quality images fro
 - **Structured Note Metadata**: Extracts title, description, author, timestamps, tags, counts, cover, and image assets as JSON
 - **Video Metadata**: Extracts video URL, backup URLs, codec, quality, dimensions, size, and cover when a note is a video
 - **Profile Metadata**: Extracts profile basics, counts, public tabs, and homepage post cards from user profile pages
-- **Video Detection**: Identifies video posts and returns an appropriate message
 - **Share Text Parsing**: Automatically extracts short links from copied share text
 
 ## Installation
