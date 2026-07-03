@@ -10,6 +10,7 @@ A Model Context Protocol (MCP) server for extracting original-quality images fro
 - **Original Quality**: Transforms compressed CDN URLs to original high-resolution images
 - **Structured Note Metadata**: Extracts title, description, author, timestamps, tags, counts, cover, and image assets as JSON
 - **Video Metadata**: Extracts video URL, backup URLs, codec, quality, dimensions, size, and cover when a note is a video
+- **Profile Metadata**: Extracts profile basics, counts, public tabs, and homepage post cards from user profile pages
 - **Share Text Parsing**: Automatically extracts short links from copied share text
 
 ## Installation
@@ -73,6 +74,22 @@ Extract structured metadata from a Xiaohongshu (小红书) note.
 **Output:**
 
 JSON text containing note id, canonical URL, title, description, author, publish/update timestamps, tags, like/collect/comment counts, cover URL, image URLs, and video metadata when available.
+
+### fetch_xhs_profile
+
+Extract structured profile information from a Xiaohongshu (小红书) user page.
+
+**Input Schema:**
+
+```typescript
+{
+  content: string; // Xiaohongshu user profile URL, such as https://www.xiaohongshu.com/user/profile/<uid>
+}
+```
+
+**Output:**
+
+JSON text containing user id, nickname, Rednote id, description, IP location, gender, verification type, follower/following/interaction counts, public tab state, and loaded homepage post cards.
 
 ## Development
 

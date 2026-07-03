@@ -3,7 +3,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { extractImages, extractNote } from './xhs-extract.js';
+import { extractImages, extractNote, extractProfile } from './xhs-extract.js';
 
 // Create the MCP server using the high-level McpServer API
 const server = new McpServer({
@@ -78,6 +78,40 @@ server.registerTool(
   async ({ content }) => {
     try {
       const result = await extractNote(content);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error: ${error.message}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  },
+);
+
+// Register the fetch_xhs_profile tool
+server.registerTool(
+  'fetch_xhs_profile',
+  {
+    description: 'Extract structured profile information from a Xiaohongshu (小红书) user profile URL.',
+    inputSchema: {
+      content: z.string().describe('Xiaohongshu user profile URL, such as https://www.xiaohongshu.com/user/profile/<uid>'),
+    },
+  },
+  async ({ content }) => {
+    try {
+      const result = await extractProfile(content);
       return {
         content: [
           {

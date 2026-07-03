@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   extractPostInfo,
+  extractProfileInfo,
   extractShortLink,
   normalizeNoteData,
+  normalizeProfileData,
   parseXhsCount,
   transformToOriginal,
 } from '../dist/xhs-extract.js';
@@ -20,6 +22,12 @@ test('extractPostInfo parses note id and xsec_token from full URLs', () => {
   assert.equal(info?.postId, 'abc123');
   assert.equal(info?.xsecToken, 'tok=');
   assert.equal(info?.canonicalUrl, 'https://www.xiaohongshu.com/explore/abc123?xsec_token=tok%3D');
+});
+
+test('extractProfileInfo parses user profile URLs', () => {
+  const info = extractProfileInfo('https://www.xiaohongshu.com/user/profile/u123?xsec_token=tok&xsec_source=pc_search');
+  assert.equal(info?.userId, 'u123');
+  assert.equal(info?.canonicalUrl, 'https://www.xiaohongshu.com/user/profile/u123?xsec_token=tok&xsec_source=pc_search');
 });
 
 test('transformToOriginal converts Xiaohongshu CDN URLs', () => {
@@ -129,4 +137,91 @@ test('normalizeNoteData returns video metadata for video notes', () => {
     size: 123456,
     coverUrl: 'https://example.com/cover.jpg',
   });
+});
+
+test('normalizeProfileData extracts profile fields and keeps blank-noteId cards distinct', () => {
+  const profile = normalizeProfileData({
+    user: {
+      userPageData: {
+        basicInfo: {
+          nickname: '明日方舟终末地',
+          redId: '95854265689',
+          desc: '跨越边境 直至前线',
+          ipLocation: '上海',
+          gender: 2,
+          imageb: 'https://sns-avatar-qc.xhscdn.com/avatar/big.jpg?imageView2/2/w/540/format/webp',
+          images: 'https://sns-avatar-qc.xhscdn.com/avatar/small.jpg',
+        },
+        verifyInfo: { redOfficialVerifyType: 2 },
+        extraInfo: { fstatus: 'none', blockType: 'DEFAULT' },
+        interactions: [
+          { type: 'follows', name: '关注', count: '1' },
+          { type: 'fans', name: '粉丝', count: '1万+' },
+          { type: 'interaction', name: '获赞与收藏', count: '4.1万' },
+        ],
+        tabPublic: {
+          collectionNote: { count: 2, display: true, lock: false },
+        },
+      },
+      noteQueries: [{ hasMore: true }],
+      notes: [[
+        {
+          id: '',
+          index: 0,
+          xsecToken: 'token-a',
+          noteCard: {
+            noteId: '',
+            xsecToken: 'token-a',
+            type: 'video',
+            displayTitle: '版本PV',
+            user: { userId: 'u1', nickname: '明日方舟终末地' },
+            interactInfo: { likedCount: '4.1万', sticky: true },
+            cover: {
+              width: 1348,
+              height: 1011,
+              urlDefault: 'http://sns-webpic-qc.xhscdn.com/20260703/signature/hash/spectrum/cover-a!nc_n_nwebp_mw_1',
+            },
+          },
+        },
+        {
+          id: '',
+          index: 1,
+          xsecToken: 'token-b',
+          noteCard: {
+            noteId: '',
+            xsecToken: 'token-b',
+            type: 'normal',
+            displayTitle: '参展情报公开',
+            user: { userId: 'u1', nickname: '明日方舟终末地' },
+            interactInfo: { likedCount: '2216', sticky: false },
+            cover: {
+              width: 6000,
+              height: 3375,
+              urlDefault: 'http://sns-webpic-qc.xhscdn.com/20260703/signature/hash/spectrum/cover-b!nc_n_nwebp_mw_1',
+            },
+          },
+        },
+      ]],
+    },
+  }, {
+    userId: 'u1',
+    canonicalUrl: 'https://www.xiaohongshu.com/user/profile/u1',
+  });
+
+  assert.equal(profile.nickname, '明日方舟终末地');
+  assert.equal(profile.redId, '95854265689');
+  assert.equal(profile.description, '跨越边境 直至前线');
+  assert.equal(profile.ipLocation, '上海');
+  assert.equal(profile.gender, 'female');
+  assert.equal(profile.verifyType, 2);
+  assert.equal(profile.followerCount, 10000);
+  assert.equal(profile.likedAndCollectedCount, 41000);
+  assert.equal(profile.hasMoreNotes, true);
+  assert.equal(profile.postsLoaded, 2);
+  assert.equal(profile.posts.length, 2);
+  assert.equal(profile.posts[0].title, '版本PV');
+  assert.equal(profile.posts[0].sticky, true);
+  assert.equal(profile.posts[0].likeCount, 41000);
+  assert.equal(profile.posts[1].title, '参展情报公开');
+  assert.match(profile.posts[0].coverOriginalUrl, /^https:\/\/ci\.xiaohongshu\.com\//);
 });
