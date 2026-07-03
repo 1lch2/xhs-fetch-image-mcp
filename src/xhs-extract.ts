@@ -56,6 +56,7 @@ export interface NoteExtractionResult {
   counts: NoteCounts;
   coverUrl: string;
   images: ImageAsset[];
+
   video: VideoAsset | null;
 }
 

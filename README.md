@@ -10,7 +10,6 @@ A Model Context Protocol (MCP) server for extracting original-quality images fro
 - **Original Quality**: Transforms compressed CDN URLs to original high-resolution images
 - **Structured Note Metadata**: Extracts title, description, author, timestamps, tags, counts, cover, and image assets as JSON
 - **Video Metadata**: Extracts video URL, backup URLs, codec, quality, dimensions, size, and cover when a note is a video
-- **Video Detection**: Identifies video posts and returns an appropriate message
 - **Share Text Parsing**: Automatically extracts short links from copied share text
 
 ## Installation
