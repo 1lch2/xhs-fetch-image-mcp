@@ -1,206 +1,262 @@
 /**
- * Xiaohongshu (小红书) Image Extraction Module
- * Ported from Cloudflare Pages implementation
+ * Xiaohongshu (小红书) extraction module.
  */
 
 import { getRandomUserAgent } from './user-agent.js';
 
-interface PostInfo {
+export interface PostInfo {
   postId: string;
   xsecToken: string;
+  canonicalUrl: string;
 }
 
-interface ExtractionResult {
+export interface ImageAsset {
+  url: string;
+  originalUrl: string;
+  width?: number;
+  height?: number;
+}
+
+export interface NoteAuthor {
+  name: string;
+  id: string;
+  avatar: string;
+  profileUrl: string;
+}
+
+export interface NoteCounts {
+  like: number;
+  collect: number;
+  comment: number;
+}
+
+export interface NoteExtractionResult {
+  postId: string;
+  url: string;
+  title: string;
+  description: string;
+  isVideo: boolean;
+  author: NoteAuthor;
+  publishTime: string;
+  publishTimestamp: number;
+  updateTime: string;
+  updateTimestamp: number;
+  tags: string[];
+  counts: NoteCounts;
+  coverUrl: string;
+  images: ImageAsset[];
+}
+
+export interface ImageExtractionResult {
   images: string[];
   title: string;
   isVideo: boolean;
 }
 
-/**
- * Check if content contains Xiaohongshu short link
- */
-const isShortLink = (input: string): boolean => {
-  return /https?:\/\/xhslink\.com\/[a-zA-Z0-9\/]+/.test(input);
-};
+const XHS_SHORT_LINK_RE = /https?:\/\/xhslink\.com\/[a-zA-Z0-9/]+/;
+const XHS_URL_RE = /https?:\/\/(www\.)?xiaohongshu\.com\/[^\s"'<>】）)]+/;
 
-/**
- * Extract short link from mixed content and resolve to full URL
- */
-const parseShortLink = async (content: string): Promise<string | null> => {
+function firstString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+export function parseXhsCount(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return 0;
+
+  const s = value.trim().replace(/,/g, '').replace(/\s+/g, '');
+  const match = s.match(/^([0-9]+(?:\.[0-9]+)?)(万|亿|k|K|w|W)?\+?$/);
+  if (!match) return 0;
+
+  const n = Number(match[1]);
+  if (!Number.isFinite(n)) return 0;
+  const unit = match[2];
+  if (unit === '万' || unit === 'w' || unit === 'W') return Math.round(n * 10000);
+  if (unit === '亿') return Math.round(n * 100000000);
+  if (unit === 'k' || unit === 'K') return Math.round(n * 1000);
+  return Math.round(n);
+}
+
+export function transformToOriginal(urlStr: string): string {
   try {
-    // Extract short link using regex
-    const shortLinkRegex = /(https?:\/\/xhslink\.com\/[a-zA-Z0-9\/]+)/;
-    const match = content.match(shortLinkRegex);
+    const url = new URL(urlStr);
+    const { hostname, pathname } = url;
 
-    if (!match) {
-      return null;
+    if (hostname.includes('xhscdn.com')) {
+      const segments = pathname.split('/').filter(Boolean);
+      const subdirsAndId = segments.slice(2);
+      const lastSegment = subdirsAndId.pop() || '';
+      const imageId = lastSegment.split('!')[0];
+      return `https://ci.xiaohongshu.com/${[...subdirsAndId, imageId].join('/')}`;
     }
 
-    const shortUrl = match[1];
+    if (hostname === 'ci.xiaohongshu.com') {
+      return `${url.origin}${pathname}`;
+    }
+  } catch {
+    return urlStr;
+  }
+  return urlStr;
+}
 
-    // Use fetch with redirect follow to get the final URL
-    const response = await fetch(shortUrl, {
+export function extractShortLink(content: string): string | null {
+  return content.match(XHS_SHORT_LINK_RE)?.[0] ?? null;
+}
+
+async function resolveShortLink(content: string): Promise<string | null> {
+  const shortLink = extractShortLink(content);
+  if (!shortLink) return null;
+
+  try {
+    const response = await fetch(shortLink, {
       method: 'GET',
       redirect: 'follow',
       headers: {
         'User-Agent': getRandomUserAgent(),
         Referer: 'https://www.xiaohongshu.com/',
-        Accept:
-          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
       },
     });
-
-    // Return the final URL after all redirects
     return response.url;
   } catch (error: any) {
     console.error('Failed to parse short link:', error.message);
     return null;
   }
-};
+}
 
-/**
- * Extract postId and xsecToken from URL
- */
-const extractPostInfo = (input: string): PostInfo | null => {
-  // Extract URL part
-  const urlRegex = /https?:\/\/(www\.)?xiaohongshu\.com\/[^\s?]*(\?[^\s]*)?/;
-  const match = input.match(urlRegex);
+export function extractPostInfo(input: string): PostInfo | null {
+  const match = input.match(XHS_URL_RE);
   if (!match) return null;
 
   const urlObj = new URL(match[0]);
-  const path = urlObj.pathname;
-
-  // Extract Post ID (support explore, discovery/item, user/profile)
-  const idMatch = path.match(/(?:explore|item|profile)\/([a-z0-9]+)/i);
-  const postId = idMatch ? idMatch[1] : null;
-
-  // Extract xsec_token
-  const xsecToken = urlObj.searchParams.get('xsec_token');
+  const idMatch = urlObj.pathname.match(/\/(?:explore|discovery\/item|item)\/([a-zA-Z0-9]+)/);
+  const postId = idMatch ? idMatch[1] : '';
+  const xsecToken = urlObj.searchParams.get('xsec_token') ?? '';
 
   if (!postId || !xsecToken) return null;
 
-  return { postId, xsecToken };
-};
+  return {
+    postId,
+    xsecToken,
+    canonicalUrl: `${urlObj.origin}/explore/${postId}?xsec_token=${encodeURIComponent(xsecToken)}`,
+  };
+}
 
-/**
- * Transform CDN/thumbnail URLs to original quality URLs
- */
-const transformToOriginal = (urlStr: string): string => {
-  try {
-    const url = new URL(urlStr);
-    const { hostname, pathname } = url;
+async function normalizeContentUrl(content: string): Promise<string> {
+  if (!XHS_SHORT_LINK_RE.test(content)) return content;
+  const fullLink = await resolveShortLink(content);
+  if (!fullLink) throw new Error('Failed to resolve short link');
+  return fullLink;
+}
 
-    // Case 1: xhscdn.com domain conversion
-    if (hostname.includes('xhscdn.com')) {
-      const segments = pathname.split('/').filter(Boolean);
-      // Match pattern: [subdomain, domain, date(12), hash(32), *subdirs, id!...]
-      const subdirsAndId = segments.slice(2);
-      const lastSegment = subdirsAndId.pop() || '';
-      const imageId = lastSegment.split('!')[0];
+function extractInitialState(html: string): any {
+  const stateRegex = /window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?})(?:<\/script>|;|$)/;
+  const match = html.match(stateRegex);
+  if (!match) throw new Error('Initial state not found');
+  return JSON.parse(match[1].replace(/:undefined/g, ':null'));
+}
 
-      return `https://ci.xiaohongshu.com/${[...subdirsAndId, imageId].join('/')}`;
-    }
+function findNoteData(state: any, postId: string): any {
+  const noteDetailMap = state?.note?.noteDetailMap ?? {};
+  const wrapper = noteDetailMap[postId];
+  const direct = wrapper?.note ?? wrapper?.noteInfo ?? wrapper;
+  if (direct && typeof direct === 'object') return direct;
+  return null;
+}
 
-    // Case 2: ci.xiaohongshu.com (remove query params)
-    if (hostname === 'ci.xiaohongshu.com') {
-      return `${url.origin}${pathname}`;
-    }
+function formatTimestamp(value: unknown): { text: string; seconds: number } {
+  if (typeof value !== 'number' || value <= 0) return { text: '', seconds: 0 };
+  const ms = value > 100000000000 ? value : value * 1000;
+  return { text: new Date(ms).toISOString(), seconds: Math.floor(ms / 1000) };
+}
 
-    return urlStr;
-  } catch {
-    return urlStr;
-  }
-};
+export function normalizeNoteData(noteData: any, info: PostInfo): NoteExtractionResult {
+  const isVideo = noteData.type === 'video' || (noteData.videoList?.length ?? 0) > 0;
+  const title = firstString(noteData.title, noteData.displayTitle, noteData.desc);
+  const author = noteData.user ?? {};
+  const publish = formatTimestamp(noteData.time);
+  const update = formatTimestamp(noteData.lastUpdateTime);
+  const images: ImageAsset[] = Array.isArray(noteData.imageList)
+    ? noteData.imageList.map((image: any) => {
+      const url = firstString(image.urlDefault, image.url, image.urlPre);
+      return {
+        url,
+        originalUrl: transformToOriginal(url),
+        width: typeof image.width === 'number' ? image.width : undefined,
+        height: typeof image.height === 'number' ? image.height : undefined,
+      };
+    }).filter((image: ImageAsset) => image.url)
+    : [];
+  const coverUrl = firstString(
+    noteData.imageList?.[0]?.urlDefault,
+    noteData.imageList?.[0]?.url,
+    noteData.video?.image?.firstFrameUrl,
+  );
+  const interact = noteData.interactInfo ?? {};
+  const authorId = firstString(author.userId, author.id);
 
-/**
- * Fetch post data and extract images
- */
-const fetchPostData = async (postId: string, xsecToken: string): Promise<ExtractionResult> => {
-  const targetUrl = `https://www.xiaohongshu.com/explore/${postId}?xsec_token=${xsecToken}`;
+  return {
+    postId: info.postId,
+    url: info.canonicalUrl,
+    title,
+    description: firstString(noteData.desc),
+    isVideo,
+    author: {
+      name: firstString(author.nickname, author.nickName, author.name),
+      id: authorId,
+      avatar: firstString(author.avatar),
+      profileUrl: authorId ? `https://www.xiaohongshu.com/user/profile/${authorId}` : '',
+    },
+    publishTime: publish.text,
+    publishTimestamp: publish.seconds,
+    updateTime: update.text,
+    updateTimestamp: update.seconds,
+    tags: Array.isArray(noteData.tagList)
+      ? noteData.tagList.map((tag: any) => firstString(tag.name, tag.id)).filter(Boolean)
+      : [],
+    counts: {
+      like: parseXhsCount(interact.likedCount ?? interact.likeCount),
+      collect: parseXhsCount(interact.collectedCount ?? interact.collectCount),
+      comment: parseXhsCount(interact.commentCount),
+    },
+    coverUrl,
+    images,
+  };
+}
 
-  const response = await fetch(targetUrl, {
+async function fetchNoteData(info: PostInfo): Promise<any> {
+  const response = await fetch(info.canonicalUrl, {
     headers: {
       'User-Agent': getRandomUserAgent(),
       Referer: 'https://www.xiaohongshu.com/',
-      Accept:
-        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
       Cookie: 'webId=anonymous',
     },
   });
 
-  if (!response.ok) {
-    throw new Error(`XHS returned ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`XHS returned ${response.status}`);
 
-  const html = await response.text();
+  const state = extractInitialState(await response.text());
+  const noteData = findNoteData(state, info.postId);
+  if (!noteData) throw new Error('Note data not found');
+  return noteData;
+}
 
-  // Extract window.__INITIAL_STATE__
-  const stateRegex = /window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?})(?:<\/script>|;|$)/;
-  const match = html.match(stateRegex);
-
-  if (!match) {
-    throw new Error('Initial state not found');
-  }
-
-  // Parse JSON (replace undefined with null)
-  const state = JSON.parse(match[1].replace(/:undefined/g, ':null'));
-  const noteData = state.note?.noteDetailMap?.[postId]?.note;
-
-  if (!noteData) {
-    throw new Error('Note data not found');
-  }
-
-  // Check if it's a video post
-  const isVideo = noteData.type === 'video' || noteData.videoList?.length > 0;
-
-  if (isVideo) {
-    return {
-      images: [],
-      title: noteData.title || '',
-      isVideo: true,
-    };
-  }
-
-  if (!noteData.imageList || noteData.imageList.length === 0) {
-    throw new Error('Image list not found');
-  }
-
-  const originalImages = noteData.imageList.map((img: any) =>
-    transformToOriginal(img.urlDefault || img.url)
-  );
-
-  return {
-    images: originalImages,
-    title: noteData.title || '',
-    isVideo: false,
-  };
-};
-
-/**
- * Main extraction function
- * Accepts mixed content: share button text, short links, or full URLs
- */
-export const extractImages = async (content: string): Promise<ExtractionResult> => {
-  let contentToProcess = content;
-
-  // If it's a short link (or contains one), resolve it first
-  if (isShortLink(content)) {
-    const fullLink = await parseShortLink(content);
-    if (!fullLink) {
-      throw new Error('Failed to resolve short link');
-    }
-    contentToProcess = fullLink;
-  }
-
-  // Extract post info from the URL
+export async function extractNote(content: string): Promise<NoteExtractionResult> {
+  const contentToProcess = await normalizeContentUrl(content);
   const info = extractPostInfo(contentToProcess);
+  if (!info) throw new Error('Invalid Xiaohongshu URL. Could not extract postId or xsecToken.');
+  return normalizeNoteData(await fetchNoteData(info), info);
+}
 
-  if (!info) {
-    throw new Error('Invalid Xiaohongshu URL. Could not extract postId or xsecToken.');
-  }
-
-  // Fetch and extract images
-  return await fetchPostData(info.postId, info.xsecToken);
-};
-
-export type { ExtractionResult, PostInfo };
+export async function extractImages(content: string): Promise<ImageExtractionResult> {
+  const note = await extractNote(content);
+  return {
+    title: note.title,
+    isVideo: note.isVideo,
+    images: note.isVideo ? [] : note.images.map((image) => image.originalUrl),
+  };
+}

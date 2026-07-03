@@ -8,6 +8,7 @@ A Model Context Protocol (MCP) server for extracting original-quality images fro
 
 - **Multiple Input Formats**: Accepts share button text, short links (xhslink.com), or full URLs
 - **Original Quality**: Transforms compressed CDN URLs to original high-resolution images
+- **Structured Note Metadata**: Extracts title, description, author, timestamps, tags, counts, cover, and image assets as JSON
 - **Video Detection**: Identifies video posts and returns an appropriate message
 - **Share Text Parsing**: Automatically extracts short links from copied share text
 
@@ -56,6 +57,22 @@ Extract original-quality images from a Xiaohongshu (小红书) post.
 - For image posts: Title and list of original-quality image URLs
 - For video posts: "This post is a video, no images available."
 - For errors: Error message with details
+
+### fetch_xhs_note
+
+Extract structured metadata from a Xiaohongshu (小红书) note.
+
+**Input Schema:**
+
+```typescript
+{
+  content: string; // Xiaohongshu share text, short link (xhslink.com), or full note URL
+}
+```
+
+**Output:**
+
+JSON text containing note id, canonical URL, title, description, author, publish/update timestamps, tags, like/collect/comment counts, cover URL, and image URLs.
 
 ## Development
 
