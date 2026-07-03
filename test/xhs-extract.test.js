@@ -86,3 +86,47 @@ test('normalizeNoteData returns structured note metadata', () => {
   assert.equal(note.images[0].originalUrl, 'https://ci.xiaohongshu.com/hash/spectrum/image-a');
   assert.equal(note.coverUrl, note.images[0].url);
 });
+
+test('normalizeNoteData returns video metadata for video notes', () => {
+  const note = normalizeNoteData({
+    title: 'Video note',
+    type: 'video',
+    video: {
+      image: {
+        firstFrameUrl: 'https://example.com/cover.jpg',
+      },
+      media: {
+        stream: {
+          h264: [
+            {
+              masterUrl: 'https://example.com/video.mp4',
+              backupUrls: ['https://backup.example.com/video.mp4'],
+              qualityType: 'HD',
+              width: 1920,
+              height: 1080,
+              size: 123456,
+            },
+          ],
+        },
+      },
+    },
+  }, {
+    postId: 'video123',
+    xsecToken: 'tok=',
+    canonicalUrl: 'https://www.xiaohongshu.com/explore/video123?xsec_token=tok%3D',
+  });
+
+  assert.equal(note.isVideo, true);
+  assert.equal(note.images.length, 0);
+  assert.equal(note.coverUrl, 'https://example.com/cover.jpg');
+  assert.deepEqual(note.video, {
+    url: 'https://example.com/video.mp4',
+    backupUrls: ['https://backup.example.com/video.mp4'],
+    codec: 'h264',
+    quality: 'HD',
+    width: 1920,
+    height: 1080,
+    size: 123456,
+    coverUrl: 'https://example.com/cover.jpg',
+  });
+});

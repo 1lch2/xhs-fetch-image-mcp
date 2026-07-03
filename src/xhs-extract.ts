@@ -17,6 +17,17 @@ export interface ImageAsset {
   height?: number;
 }
 
+export interface VideoAsset {
+  url: string;
+  backupUrls: string[];
+  codec: string;
+  quality: string;
+  width?: number;
+  height?: number;
+  size?: number;
+  coverUrl: string;
+}
+
 export interface NoteAuthor {
   name: string;
   id: string;
@@ -45,6 +56,8 @@ export interface NoteExtractionResult {
   counts: NoteCounts;
   coverUrl: string;
   images: ImageAsset[];
+
+  video: VideoAsset | null;
 }
 
 export interface ImageExtractionResult {
@@ -173,6 +186,31 @@ function formatTimestamp(value: unknown): { text: string; seconds: number } {
   return { text: new Date(ms).toISOString(), seconds: Math.floor(ms / 1000) };
 }
 
+function normalizeVideoData(noteData: any, coverUrl: string): VideoAsset | null {
+  const stream = noteData?.video?.media?.stream;
+  if (!stream || typeof stream !== 'object') return null;
+
+  for (const codec of ['h265', 'h264', 'av1', 'h266']) {
+    const candidates = stream[codec];
+    if (!Array.isArray(candidates) || candidates.length === 0) continue;
+    const item = candidates.find((candidate: any) => firstString(candidate.masterUrl, candidate.url)) ?? candidates[0];
+    const url = firstString(item.masterUrl, item.url);
+    if (!url) continue;
+    return {
+      url,
+      backupUrls: Array.isArray(item.backupUrls) ? item.backupUrls.filter((v: unknown) => typeof v === 'string') : [],
+      codec,
+      quality: firstString(item.qualityType, item.quality, item.format),
+      width: typeof item.width === 'number' ? item.width : undefined,
+      height: typeof item.height === 'number' ? item.height : undefined,
+      size: typeof item.size === 'number' ? item.size : undefined,
+      coverUrl,
+    };
+  }
+
+  return null;
+}
+
 export function normalizeNoteData(noteData: any, info: PostInfo): NoteExtractionResult {
   const isVideo = noteData.type === 'video' || (noteData.videoList?.length ?? 0) > 0;
   const title = firstString(noteData.title, noteData.displayTitle, noteData.desc);
@@ -224,6 +262,7 @@ export function normalizeNoteData(noteData: any, info: PostInfo): NoteExtraction
     },
     coverUrl,
     images,
+    video: isVideo ? normalizeVideoData(noteData, coverUrl) : null,
   };
 }
 
